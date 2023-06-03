@@ -1,97 +1,240 @@
-const searchInput = document.getElementById("search-input");
+//const searchInput = document.getElementById("search-input");
 //const apiKey = "AIzaSyCRjuKfEY9LbC2nt0M3hrW-NNFceODfBFk" exhausted
 const apiKey = "AIzaSyBkY-d_sudnUL2yLs9JW4mMw2f74clPaPU";
-localStorage.setItem("api_key", apiKey);
-const container = document.getElementById("container");
+localStorage.setItem("api_key",apiKey);
+let searchInput;
+//for header -----------
+window.addEventListener('DOMContentLoaded',async function(){
+
+  const headerContainer=document.getElementsByClassName('headerContainer')[0];
+
+  try{
+   const response=await fetch('header.html');
+   const data=await response.text();
+   headerContainer.innerHTML=data;
 
 
-/*
-    https://youtube.googleapis.com/youtube/v3/search?part=snippet,statistics&maxResults=1&q=mycodeschool&key=AIzaSyBprXFgJkoIn4TkCLOCXd9HLOujKmt9evk
-*/
-function searchVideos() {
-    let searchValue = searchInput.value;
-    // fetch the list of videos for this searchValue
-    fetchVideos(searchValue);
+    searchInput=document.getElementById('input-search');
+   let searchBtn=document.getElementById('search-btn');
+   searchBtn.addEventListener('click',()=>{
+    searchVideos(searchInput);
+   });
+  // searchBtn.onclick=function(){
+  //   searchVideos(searchInput)
+  // };
+  }
+  catch(error){
+      console.log("error fetching header.html ",error);
+  }
+})
+
+
+window.addEventListener('load',()=>{
+    // searchInput.value="";
+  fetchVideos();
+});
+
+
+
+
+
+function searchVideos(searchInput){
+     let searchValue=searchInput.value;
+     fetchVideos(searchValue);
 }
 
-async function fetchVideos(searchValue) {
-    // make api call
+async function fetchVideos(searchValue){
+    let endpoint=`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${searchValue}&maxResults=20&key=${apiKey}`;
+   
+    try{
+    let response=await fetch(endpoint);
+    let data=await response.json();
 
-        let endpoint = `https://youtube.googleapis.com/youtube/v3/search?part=snippet&maxResults=20&q=${searchValue}&key=${apiKey}`;
+     for(let item of data.items){
+       let videoId=item.id.videoId;
+      let videoStats=await fetchStats(videoId);
+      // console.log(videoStats.items.statistics) 
+      // console.log(videoStats);
+      if(videoStats.items.length>0)    
+       item.videoStats=videoStats.items[0].statistics; 
+       item.duration=videoStats.items[0] && videoStats.items[0].contentDetails.duration;
+     }
 
-        try {
-            let response = await fetch(endpoint); // response is instance of Response class
-            let result = await response.json();
-            for (let i = 0; i < result.items.length; i++) {
-                let video = result.items[i];
-                let videoStats = await fetchStats(video.id.videoId)
-                if (videoStats.items.length > 0)
-                    result.items[i].videoStats = videoStats.items[0].statistics;
-                result.items[i].duration = videoStats.items[0] && videoStats.items[0].contentDetails.duration;
-            }
-            showThumbnails(result.items);
-        }
-        catch (error) {
-            console.log("Something went wrong", error);
-        }
+
+    showVideos(data.items);
     }
-
-function getViews(n) {
-    if (n < 1000) return n;
-    else if (n >= 1000 && n <= 999999) {
-        n /= 1000;
-        n = parseInt(n)
-        return n + "K";
-    }
-    return parseInt(n / 1000000) + "M";
-}
-
-function showThumbnails(items) {
-    container.innerHTML = ''; // clear the last seacrh and then implement the next search result
-
-    for (let i = 0; i < items.length; i++) {
-        let videoItem = items[i];
-        let imageUrl = videoItem.snippet.thumbnails.high.url;
-        let videoElement = document.createElement("div");
-
-        videoElement.addEventListener("click", () => {
-            navigateToVideo(videoItem.id.videoId);
-        })
-
-        const videoChildren = `
-        <img src="${imageUrl}" />
-        <b>${formattedData(videoItem.duration)}</b>
-        <p class="title">${videoItem.snippet.title}</p>
-        <p class="channel-name">${videoItem.snippet.channelTitle}</p>
-        <p class="view-count">${videoItem.videoStats ? getViews(videoItem.videoStats.viewCount) + "  Views" : "NA"}</p>
-    `;
-
-        videoElement.innerHTML = videoChildren;
-        container.append(videoElement); // Appending all the data to container
-
+    catch(error){
+        console.log('something went wrong',error);
     }
 }
-async function fetchStats(videoId) {
-    const endpoint = `https://www.googleapis.com/youtube/v3/videos?key=${apiKey}&part=statistics,contentDetails&id=${videoId}`;
-    let response = await fetch(endpoint);
-    let result = await response.json();
-    return result;
+
+// -----------for formating views------------------
+function formatViews(count){
+if(count<1000){
+  return count;
 }
-function formattedData(duration) {
-    if (!duration) return "NA";
-    // PT2H33M23S
-    let hrs = duration.slice(2, 4);
-    let mins = duration.slice(5, 7);
-    let seconds;
-    if (duration.length > 8) {
-        seconds = duration.slice(8, 10);
-    }
-    let str = `${hrs}:${mins}`;
-    seconds && (str += `:${seconds}`)
-    return str;
+else if(count<=999999 && count>=1000){
+const thousand=parseInt(count/1000);
+return thousand+"k";
+}
+else if(count>=1000000){
+  const millions=parseInt(count/10000);
+  return millions+"m";
+}
 }
 
-function navigateToVideo(videoId) {
+// --------for formating Date-----------------------
+
+function formatDate(inputDateTime){
+  let date=new Date().getTime();
+  console.log(date);
+  let target=new Date(inputDateTime).getTime();
+  console.log(target);
+  let timeDiff=Math.abs(date-target);
+  // console.log(timeDiff)
+  let daysDiff=Math.ceil(timeDiff/(1000*3600*24));
+  // console.log(daysDiff);
+  
+  if(daysDiff===0){
+      const today= new Date(Date.now()-target).getHours();
+      return today+'ago';
+  }
+  else if(daysDiff===1){
+      return 'yesterday';
+  }
+  else if(daysDiff>1 && daysDiff<=7){
+      return `${daysDiff} days ago`;
+  }
+  else if(daysDiff>7 && daysDiff<=14){
+      return `last week `;
+  }
+  else if(daysDiff>14 && daysDiff<=30){
+      return `${Math.floor(daysDiff/7)} weeks ago`;
+  }
+  else if(daysDiff>30 && daysDiff<=365){
+      return `${Math.floor(daysDiff/30)} months ago`
+  }
+  else {
+      return `${Math.floor(daysDiff/365)} years ago`
+  }
+  
+  }
+
+
+// ------------formating duration-------------------
+
+
+function formatDuration(duration){
+if(duration || duration!==undefined){
+let p=duration.indexOf('P');
+let d=duration.indexOf('D');
+let t=duration.indexOf('T');
+let h=duration.indexOf('H');
+let m=duration.indexOf('M');
+let s=duration.indexOf('S');
+
+let day=0,hour=0,min=0,sec=0;
+if(p!==-1 && d!==-1 && t!==-1 && h!==-1 && m!==-1 && s!==-1){
+    day=duration.substring(p+1,d);
+    hour=duration.substring(t+1,h);
+    min=duration.substring(h+1,m);
+    sec=duration.substring(m+1,s);
+    return `${day}:${hour}:${min}:${sec}`;
+}
+else if(p!==-1 && d===-1 && t!==-1 && h!==-1 && m!==-1 && s!==-1){
+    hour=duration.substring(t+1,h);
+    min=duration.substring(h+1,m);
+    sec=duration.substring(m+1,s);
+    return `${hour}:${min}:${sec}`;
+}
+else if(p!==-1 && d===-1 && t!==-1 && h===-1 && m!==-1 && s!==-1){
+    min=duration.substring(t+1,m);
+    sec=duration.substring(m+1,s);
+    return `${min}:${sec}`;
+}
+else if(p!==-1 && d===-1 && t!==-1 && h===-1 && m===-1 && s!==-1){
+    sec=duration.substring(t+1,s);
+    return `${min}:${sec}`;
+}
+}
+else{
+  return '';
+}
+// console.log(day,hour,min,sec);
+}
+
+
+ function showVideos(items){
+    console.log(items);
+    let main=document.getElementsByTagName('main')[0];
+    main.innerHTML="";
+
+    for(let videoItem of items){
+
+     let imageUrl=videoItem.snippet.thumbnails.high.url;
+     let videoCard=document.createElement('div');
+     videoCard.className='videoCards';
+      
+     videoCard.addEventListener('click',()=>{
+      navigateToVideo(videoItem.id.videoId);
+     });
+
+    videoCard.innerHTML=`
+    <div class="image">
+        <img src= ${imageUrl} alt="">
+        <span class="duration">${videoItem.duration?formatDuration(videoItem.duration):''}
+        </span>
+    </div>
+    <div class="video-info">
+      <div class="channel-logo">
+        <img src="assets/images/youtube.png" alt="channel-logo">
+      </div>
+      <div class="info">
+        <h5 id="title">${videoItem.snippet.title.slice(0,35)}...</h5>
+        <p >${videoItem.snippet.channelTitle}</p>
+        <div class="view-time">
+            <span class="views">${videoItem.videoStats ? formatViews(videoItem.videoStats.viewCount)+' Views':'NA'}</span>
+            <span class="time">${formatDate(videoItem.snippet.publishedAt)}</span>
+        </div>
+      </div>
+    </div>
+
+     `;
+
+     main.append(videoCard);
+    }
+
+}
+
+// https://youtube.googleapis.com/youtube/v3/videos?part=statistics&id=Ks-_Mh1QhMc&key=[]
+async function fetchStats(videoId){
+
+  const endpoint=`https://youtube.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${videoId}&key=${apiKey}`
+
+     let response=await fetch(endpoint);
+     let result= await response.json();
+      console.log(result);
+  return result;
+}
+
+
+// ---------navigate to new page--------------------
+function navigateToVideo(videoId){
+  console.log(videoId);
+  console.log(searchInput);
+  
+if(videoId){
+  const path='/video.html';
+  // document.cookie=`videoId=${videoId}; path=${path}`
+   let myObject={videoId:`${videoId}`,inputValue:`${searchInput.value}`};
+   let cookieValue=JSON.stringify(myObject);
+   document.cookie="myCookie="+cookieValue;
+ window.open('http://127.0.0.1:5500/video.html','blank');
+}
+else{
+  alert('Owner want to watch this video in Youtube');
+}
+}navigateToVideo(videoId) {
     let path = `/Youtube_Clone/video.html`;
     if (videoId) {
         // video_id: video_id
